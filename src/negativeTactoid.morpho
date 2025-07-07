@@ -1,0 +1,237 @@
+// Simulate the shape of a negative tactoid in 3D//
+import optimize
+import meshgen
+import vtk
+
+class NegativeTactoid {
+  init(kappa = 1, omega = 1) {
+    self.kappa = kappa
+    self.omega = omega
+    self.mesh = nil
+    self.director = nil
+  }
+
+  loadMesh(String fname) {
+    self.mesh = Mesh(fname)
+  }
+
+  saveMesh(String fname) {
+    self.mesh.save(fname)
+  }
+
+  loadVTK(String fname) {
+    var vtkimp = VTKImporter(fname)
+    self.mesh = vtkimp.mesh()
+    self.director = vtkimp.field("director")
+  }
+
+  saveVTK(String fname) {
+    var vtkexp = VTKExporter(self.director, fieldname="director")
+    vtkexp.export(fname)
+  }
+
+  initialField() {
+    self.director = Field(self.mesh, fn (x,y,z) Matrix([1,0,0]))
+  }
+
+  passSelections(Selection shell, Selection bndCube) {
+    self.shell   = shell
+    self.bndCube = bndCube
+  }
+
+  // Bounding Box
+  _bndBox(Selection sel) {
+    var ids = sel.idlistforgrade(0) // get 0-elements
+    var xT = []                     // ~ of x = mh.vertexmatrix().transpose()
+    for (i in ids) {
+      xT.append(self.mesh.vertexposition(i))
+    }
+    var X = Matrix(xT.count(), (xT[0].dimensions())[0])
+    for (i in 0...xT.count()) {
+      for (j in 0...(xT[0].dimensions())[0]) {
+        X[i,j] = xT[i][j]
+      }
+    }
+    var dim = X.dimensions()[1]
+    var l = []
+    for (i in 0...dim) {
+      l.append(bounds(X.column(i)))
+    }
+    return l
+  }
+
+  setupSelections() {
+    self.bnd = Selection(self.mesh, boundary=true)
+    for (i in 1..2 ) self.bnd.addgrade(i)
+
+    var xmin = self._bndBox(self.bnd)[0][0]
+    var xmax = self._bndBox(self.bnd)[0][1]
+    var ymin = self._bndBox(self.bnd)[1][0]
+    var ymax = self._bndBox(self.bnd)[1][1]
+    var zmin = self._bndBox(self.bnd)[2][0]
+    var zmax = self._bndBox(self.bnd)[2][1]
+
+    self.bndCube = Selection(self.mesh, fn(x,y,z) x > xmax - 0.1 || x < xmin + 0.1 || y > ymax - 0.1 || y < ymin + 0.1 || z > zmax - 0.1 || z < zmin + 0.1)
+    for (i in 1..2) self.bndCube.addgrade(i)
+    self.shell = self.bnd.difference(self.bndCube)
+  }
+
+  // Calculate aspect ratio from bounding box
+  aspectRatio() {
+    var bnds = self._bndBox(self.shell)
+    var bnds2D = [0,0]
+    for (k in 0..1) {
+        bnds2D[k] = bnds[k][1]-bnds[k][0]
+    }
+    return max(bnds2D)/min(bnds2D)
+  }
+
+  setupProblem() {  // Define optimization problem
+    self.problem = OptimizationProblem(self.mesh)
+
+    self.lnematic = Nematic(self.director, ksplay=self.kappa, ktwist=self.kappa, kbend=self.kappa)
+    self.problem.addenergy(self.lnematic)
+
+    var larea = Area()
+    self.problem.addenergy(larea, selection=self.shell)
+
+    var lanchoring = AreaIntegral(fn (x, n) n.inner(normal())^2, self.director)
+    self.problem.addenergy(lanchoring, selection=self.shell, prefactor=self.omega)
+
+    var lvol = VolumeEnclosed()
+    self.problem.addconstraint(lvol,
+                               selection = self.shell)
+
+    var lnorm = NormSq(self.director)
+    self.problem.addlocalconstraint(lnorm, field=self.director, target=1)
+
+    var leq = EquiElement()
+    self.problem.addenergy(leq, prefactor=0.0001)
+
+    return self.problem
+  }
+
+  energyProfile(String fname) {
+    var names  = ["Nematic", "Area", "Anchoring", "EquiElement"]
+    var energies = []
+    for (e in self.problem.energies) {
+      energies.append(e.functional.total(self.mesh))
+    }
+    var f = File(fname, "w")
+    for (i, j in energies) f.write("${names[j]} ${i}")
+    f.close()
+  }
+
+  refine(adaptive = false) {
+    if (adaptive == true) { // Doing adaptive refinement
+        print "--------------------\t Points before adaptive refinement = ${self.mesh.count(0)}"
+        var en = self.shell.idlistforgrade(2)
+        var srefine = Selection(self.mesh)
+        for (id in en) { srefine[2, id] = true }
+        var ref     = MeshRefiner([self.mesh, self.director, self.bnd, self.shell, self.bndCube])
+        var refmap  = ref.refine(selection = srefine)
+
+        // Update problem
+        for (el in [self.problem, self.sopt, self.fopt]) el.update(refmap)
+
+        // Update references
+        self.mesh     = refmap[self.mesh]
+        self.director = refmap[self.director]
+        self.bnd      = refmap[self.bnd]
+        self.shell    = refmap[self.shell]
+        self.bndCube  = refmap[self.bndCube]
+        print "--------------------\t Points after adaptive refinement = ${self.mesh.count(0)}"
+    } else {
+        print "--------------------\t Points before refinement = ${self.mesh.count(0)}"
+        var mr     = MeshRefiner([self.mesh, self.director, self.bnd, self.shell, self.bndCube])
+        var refmap = mr.refine()
+
+        // Update problem
+        for (el in [self.problem, self.sopt, self.fopt]) el.update(refmap)
+
+        // Update references
+        self.mesh     = refmap[self.mesh]
+        self.director = refmap[self.director]
+        self.bnd      = refmap[self.bnd]
+        self.shell    = refmap[self.shell]
+        self.bndCube  = refmap[self.bndCube]
+        print "--------------------\t Points after refinement = ${self.mesh.count(0)}"
+    }
+    // Update references
+    for (i in 0..3) self.mesh.addgrade(i)
+    for (i in 0..2) self.bnd.addgrade(i)
+    for (i in 0..2) self.shell.addgrade(i)
+    for (i in 0..2) self.bndCube.addgrade(i)
+    self.setupProblem()
+    self.setupOptimizers()
+  }
+
+  setupOptimizers() { // Setup shape and field optimizers
+    // Shape Optimizer
+    self.sopt = ShapeOptimizer(self.problem, self.mesh)
+    self.sopt.steplimit = 0.001
+    self.sopt.stepsize = 0.001
+    self.sopt.etol = 1e-6
+    self.sopt.fix(self.bndCube)
+
+    // Field Optimizer
+    self.fopt = FieldOptimizer(self.problem, self.director)
+    self.fopt.stepsize = 0.001
+    self.fopt.steplimit = 0.001
+    self.fopt.etol = 1e-6
+    self.fopt.fix(self.bndCube)
+  }
+
+  configureProblem() {
+      self.setupSelections()
+      self.setupProblem()
+      self.setupOptimizers()
+  }
+
+  setupRegularization() {
+    self.rproblem = OptimizationProblem(self.mesh)
+
+    var leq=EquiElement()
+    self.rproblem.addenergy(leq, selection = self.shell)
+
+    return self.rproblem
+  }
+
+  hasConverged() {
+    return self.sopt.hasconverged() && self.fopt.hasconverged()
+  }
+
+  optimizeField(niter) {
+    print "--------------------\t Doing Field Optimization "
+    self.fopt.relax(1)
+    self.fopt.conjugategradient(niter)
+  }
+
+  optimizeShape(niter) {
+    print "--------------------\t Doing Shape Optimization "
+    self.sopt.relax(1)
+    self.sopt.conjugategradient(niter)
+  }
+
+  regularize(niter) {
+    self.ropt.linesearch(niter)
+  }
+
+  optimizeLoop(niter) {
+    print "--------------------\t Doing Optimization Loop "
+    print "Initial field iteration: "
+    self.optimizeField(100)
+
+    for (i in 1..niter) {
+        for (j in 1..10) {
+            print "Shape iteration ${i}, ${j}"
+            self.optimizeShape(5)
+            if (self.sopt.totalenergy() > 1000) return
+            print "Doing Shape iteration ${i}, ${j}"
+            self.optimizeField(20)
+            if (self.hasConverged()) break
+        }
+        if (self.hasConverged()) break
+    }
+  }
+}

@@ -1,0 +1,375 @@
+//
+import meshgen
+
+class MultiDirector {
+    init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, tau_int=1, tau_ext = 1, gamma = 1000) {
+        self.kappa_int = kappa_int
+        self.kappa_ext = kappa_ext
+
+        self.omega_int = omega_int
+        self.omega_ext = omega_ext
+
+        self.tau_int = tau_int
+        self.tau_ext = tau_ext
+
+        self.gamma = gamma
+
+        self.mesh = nil
+        self.nInterior = nil
+        self.nExterior = nil
+    }
+
+    createMesh(r=2.1, D=0.5) {
+        // Define interval for the mesh
+        var intervalSphere = [-4..4:D,-4..4:D, -4..4:D]
+
+        // Define function to get vertex Points given a mesh //
+        fn getVertexPoints(mesh) {
+            var m = mesh
+            var points = []
+            for (id in 0...m.count()) {
+            points.append(m.vertexposition(id))
+            }
+            return points
+        }
+
+        fn selectInterior(x,y,z, eps = 0.01) {
+            return x^2 + y^2 + z^2 < (r/2)^2 + eps
+        }
+
+        fn selectExterior(x,y,z, eps = 0.01) {
+            return x^2 + y^2 + z^2 > (r/2)^2 + eps
+        }
+
+        fn selectShell(x,y,z, eps = 0.01) {
+            return (x^2 + y^2 + z^2 >= (r/2)^2 - eps) && (x^2 + y^2 + z^2 <= (r/2)^2 + eps)
+        }
+
+        // Starting Mesh Manipulation //
+
+        // Define Domain for the sphere
+        var sphereDomain = CircularDomain(Matrix([0,0,0]), r/2)
+        var mgSphere = MeshGen(sphereDomain, intervalSphere, quiet=true)
+        var mesh_interior = mgSphere.build()
+
+        // Define Domain for the box
+        var boxDomain = RectangularDomain(intervalSphere)
+        var boxHole = boxDomain.difference(sphereDomain)
+        var mg_hole = MeshGen(boxHole, intervalSphere, quiet=true)
+        var mesh_exterior = mg_hole.build()
+
+        // Define Point-Cloud //
+        var ptsSel = getVertexPoints(mesh_exterior)
+        var interiorselection = Selection(mesh_interior, selectInterior)
+        interiorselection.addgrade(0)
+        interiorselection.addgrade(1)
+        var vSelId = interiorselection.idlistforgrade(0)
+
+        // Populate the Point-Cloud //
+        for (id in vSelId) {
+            ptsSel.append(mesh_interior.vertexposition(id))
+        }
+
+        // Create mesh using Delaunay Triangulation //
+        self.mesh = DelaunayMesh(ptsSel)
+        for (i in 0..3) {self.mesh.addgrade(i)}
+        return self.mesh
+    }
+
+    loadData(String m, String int, String shell, String exterior, String bnd) {
+        self.mesh = Mesh(m)
+        self.interior = Selection(self.mesh)
+        self.shell = Selection(self.mesh)
+        self.exterior = Selection(self.mesh)
+        self.bnd = Selection(self.mesh)
+        var intg0 = File(int)
+        var shellg0 = File(shell)
+        var exteriorg0 = File(exterior)
+        var bndg0 = File(bnd)
+        var idsInterior = intg0.lines()
+        var idsShell = shellg0.lines()
+        var idsExterior = exteriorg0.lines()
+        var idsBnd = bndg0.lines()
+        for (id in idsInterior) {self.interior[0,Int(id)] = true}
+        for (i in 1..2) self.interior.addgrade(i)
+        for (id in idsShell) {self.shell[0,Int(id)] = true}
+        for (i in 1..2) self.shell.addgrade(i)
+        for (id in idsExterior) {self.exterior[0,Int(id)] = true}
+        for (i in 1..2) self.exterior.addgrade(i)
+        for (id in idsBnd) {self.bnd[0,Int(id)] = true}
+        for (i in 1..2) self.bnd.addgrade(i)
+    }
+
+    initialFields() {
+        self.nInterior = Field(self.mesh, fn (x,y,z) Matrix([1,0,0]))
+        self.nExterior = Field(self.mesh, fn (x,y,z) Matrix([1,0,0]))
+    }
+
+    setupSelections(r=2.1, D=0.5) {
+
+      fn selectInterior(x,y,z, eps = 0.01) {
+        return x^2 + y^2 + z^2 < (r/2)^2 + eps
+      }
+
+      fn selectExterior(x,y,z, eps = 0.01) {
+        return x^2 + y^2 + z^2 > (r/2)^2 + eps
+      }
+
+      fn selectShell(x,y,z, eps = 0.01) {
+        return (x^2 + y^2 + z^2 >= (r/2)^2 - eps) && (x^2 + y^2 + z^2 <= (r/2)^2 + eps)
+      }
+
+      self.shell = Selection(self.mesh, selectShell)
+      for (i in 0..3) {self.shell.addgrade(i)}
+      // Define selections for exterior and interior domains
+      self.exterior = Selection(self.mesh, selectExterior)
+      for (i in 0..3) {self.exterior.addgrade(i)}
+      // Show(plotselection(self.mesh, exterior, grade=[1]))
+      self.interior = Selection(self.mesh, selectInterior)
+      for (i in 0..3) {self.interior.addgrade(i)}
+      self.bnd = Selection(self.mesh, boundary=true)
+      for (i in 0..3) {self.bnd.addgrade(i)}
+      var ids0 = self.shell.idlistforgrade(0)
+      var bndg0 = self.bnd.idlistforgrade(0)
+      var extg0 = self.exterior.idlistforgrade(0)
+      var intg0 = self.interior.idlistforgrade(0)
+      var f0 = File("shellg0.txt", "w")
+      var f1 = File("bndg0", "w")
+      var f2 = File("extg0", "w")
+      var f3 = File("intg0", "w")
+      for (i in ids0) {
+          f0.write("${i}")
+      }
+      for (i in bndg0) {
+          f1.write("${i}")
+      }
+      for (i in extg0) {
+          f2.write("${i}")
+      }
+      for (i in intg0) {
+          f3.write("${i}")
+      }
+    }
+
+    passSelections(Selection shell, Selection interior, Selection exterior, Selection cube) {
+        self.shell = shell
+        self.interior = interior
+        self.exterior = exterior
+        self.bnd = cube
+    }
+
+    setupProblem() {
+        self.problem = OptimizationProblem(self.mesh)
+        // // Exterior Functionals
+        var elasticExtFunc = Nematic(self.nExterior,
+                                    ksplay = self.kappa_ext,
+                                    ktwist = self.kappa_ext,
+                                    kbend = self.kappa_ext)
+        self.problem.addenergy(elasticExtFunc,
+                                selection = self.exterior,
+                                prefactor = self.kappa_ext)
+        var surfExtFunc    = Area()
+        self.problem.addenergy(surfExtFunc,
+                                selection = self.shell,
+                                prefactor = self.tau_ext)
+
+        var anchorExtFunc = AreaIntegral(fn (x, n) n.inner(normal())^2,
+                                        self.nExterior)
+        self.problem.addenergy(anchorExtFunc,
+                                selection = self.shell,
+                                prefactor = self.omega_ext * self.tau_ext)
+
+        // // INTERIOR Functionals
+        var elasticIntFunc = Nematic(self.nInterior,
+                                    ksplay = self.kappa_int,
+                                    ktwist = self.kappa_int,
+                                    kbend = self.kappa_int)
+        self.problem.addenergy(elasticIntFunc,
+                                selection = self.interior,
+                                prefactor = self.kappa_int)
+
+        var surfIntFunc    = Area()
+
+        self.problem.addenergy(surfIntFunc,
+                                selection = self.shell,
+                                prefactor = self.tau_int)
+
+        var anchorIntFunc  = AreaIntegral(fn (x, n) n.inner(normal())^2,
+                                        self.nInterior)
+
+        self.problem.addenergy(anchorIntFunc,
+                                selection = self.shell,
+                                prefactor = self.omega_int * self.tau_int)
+
+        // Interface Condition @ Two Fields
+        fn anchoringBdryDensity(x, qInt, qExt) {
+            var ww = (qInt-qExt).norm()
+            return ww*ww
+        }
+        var anchInteraction = AreaIntegral(anchoringBdryDensity,
+                                            self.nInterior,
+                                            self.nExterior)
+        self.problem.addenergy(anchInteraction,
+                                selection = self.shell,
+                                prefactor = self.gamma)
+
+        // // Volume Constraint @ the interior domain
+        var volumeIntConstraint = VolumeEnclosed()
+        self.problem.addconstraint(volumeIntConstraint,
+                                    selection = self.shell)
+
+        // // Make directors unit vectors
+        var lnormInt = NormSq(self.nInterior)
+        self.problem.addlocalconstraint(lnormInt,
+                                        field=self.nInterior,
+                                        target=1)
+        var lnormExt = NormSq(self.nExterior)
+        self.problem.addlocalconstraint(lnormExt,
+                                        field=self.nExterior,
+                                        target=1)
+
+        // Equi-Element
+        var leqFunc = EquiElement()
+        self.problem.addenergy(leqFunc,
+                                selection = self.shell,
+                                prefactor = 0.0001) //0.00001
+
+        return self.problem
+    }
+
+    setupRegularization() {
+        self.rproblem = OptimizationProblem(self.mesh)
+        var leq = EquiElement()
+        self.rproblem.addenergy(leq, prefactor=0.00001)
+        return self.rproblem
+    }
+
+    setupOptimizers() {
+        // Shape Optimizer
+        self.sopt = ShapeOptimizer(self.problem, self.mesh)
+        self.sopt.steplimit = 0.001
+        self.sopt.stepsize = 0.01
+        self.sopt.etol = 1e-6
+        self.sopt.fix(self.bnd)
+        // Interior Field
+        self.fiopt = FieldOptimizer(self.problem, self.nInterior)
+        self.fiopt.stepsize = 0.001
+        self.fiopt.steplimit = 0.01
+        self.fiopt.etol = 1e-6
+        self.fiopt.fix(self.bnd)
+        // Exterior Field
+        self.feopt = FieldOptimizer(self.problem, self.nExterior)
+        self.feopt.stepsize = 0.001
+        self.feopt.steplimit = 0.01
+        self.feopt.etol = 1e-6
+        self.feopt.fix(self.bnd)
+
+        self.ropt = ShapeOptimizer(self.rproblem, self.mesh)
+        self.ropt.fix(self.bnd)
+        self.ropt.stepsize = 0.001
+        self.ropt.steplimit = 0.01
+    }
+
+
+    refine(adaptive = false) {
+        if (adaptive == true) { // Doing adaptive refinement
+            print "--------------------\t Points before adaptive refinement = ${self.mesh.count(0)}"
+            var shellg2 = self.shell.idlistforgrade(2)
+            var srefine = Selection(self.mesh)
+            for (id in shellg2) { srefine[2, id] = true }
+            var ref = MeshRefiner([self.mesh,
+                                  self.nInterior,
+                                  self.nExterior,
+                                  self.shell,
+                                  self.interior,
+                                  self.exterior,
+                                  self.bnd])
+            var refmap  = ref.refine(selection = srefine)
+
+            // Update problem
+            for (el in [self.problem, self.sopt, self.ropt, self.fiopt, self.feopt]) el.update(refmap)
+
+            // Update references
+            self.mesh = refmap[self.mesh]
+            self.nInterior = refmap[self.nInterior]
+            self.nExterior = refmap[self.nExterior]
+            self.shell    = refmap[self.shell]
+            self.interior = refmap[self.interior]
+            self.exterior = refmap[self.exterior]
+            self.bnd      = refmap[self.bnd]
+            print "--------------------\t Points after adaptive refinement = ${self.mesh.count(0)}"
+        } else {
+            print "--------------------\t Points before refinement = ${self.mesh.count(0)}"
+            var ref = MeshRefiner([self.mesh,
+                                  self.nInterior,
+                                  self.nExterior,
+                                  self.shell,
+                                  self.interior,
+                                  self.exterior,
+                                  self.bnd])
+            var refmap = ref.refine()
+
+            // Update problem
+            for (el in [self.problem, self.sopt, self.ropt, self.fiopt, self.feopt]) el.update(refmap)
+
+            // Update references
+            self.mesh = refmap[self.mesh]
+            self.nInterior = refmap[self.nInterior]
+            self.nExterior = refmap[self.nExterior]
+            self.shell    = refmap[self.shell]
+            self.interior = refmap[self.interior]
+            self.exterior = refmap[self.exterior]
+            self.bnd      = refmap[self.bnd]
+            print "--------------------\t Points after refinement = ${self.mesh.count(0)}"
+        }
+        // Update references
+        for (i in 0..3) self.mesh.addgrade(i)
+        for (i in 0..2) self.shell.addgrade(i)
+        for (i in 0..2) self.interior.addgrade(i)
+        for (i in 0..2) self.exterior.addgrade(i)
+        for (i in 0..2) self.bnd.addgrade(i)
+        self.setupProblem()
+        self.setupRegularization()
+        self.setupOptimizers()
+    }
+
+    hasConverged() {
+      return self.sopt.hasconverged() && self.fiopt.hasconverged() && self.feopt.hasconverged()
+    }
+
+    optimizeFields(niter) {
+      print "--------------------\t Doing Field Optimization "
+      self.fiopt.relax(1)
+      self.fiopt.conjugategradient(niter)
+      self.feopt.relax(1)
+      self.feopt.conjugategradient(niter)
+    }
+
+    optimizeShape(niter) {
+      print "--------------------\t Doing Shape Optimization "
+      self.sopt.relax(1)
+      self.sopt.conjugategradient(niter)
+    }
+
+    regularize(niter) {
+        self.ropt.linesearch(niter)
+    }
+
+    optimizeLoop(niter) {
+      print "--------------------\t Doing Optimization Loop "
+      print "Initial field iteration: "
+      self.optimizeFields(100)
+
+      for (i in 1..niter) {
+          for (j in 1..10) {
+              print "Shape iteration ${i}, ${j}"
+              self.optimizeShape(5)
+              if (self.sopt.totalenergy() > 1000) return
+              print "Doing Shape iteration ${i}, ${j}"
+              self.optimizeFields(20)
+              if (self.hasConverged()) break
+          }
+          if (self.hasConverged()) break
+      }
+    }
+}

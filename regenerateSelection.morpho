@@ -1,0 +1,16 @@
+import plot
+var m = Mesh("prototype.mesh")
+var shell = Selection(m)
+var f0 = File("shellg0.txt")
+var ids0 = f0.lines()
+for (id in ids0) {shell[0, Int(id)] = true}
+shell.addgrade(1)
+shell.addgrade(2)
+Show(plotmesh(m, selection=shell, grade=[0, 1, 2]))
+
+var bnd = Selection(m)
+var bndg0File = File("bndg0.txt")
+var bndIds = bndg0File.lines()
+for (id in bndIds) {bnd[0, Int(id)] = true}
+bnd.addgrade(1)
+Show(plotmesh(m, selection=bnd, grade=[0,1]))

@@ -1,0 +1,110 @@
+/* Visualizer Class for Negative Tactoid Simulations */
+
+import plot
+import moviemaker
+import povray
+
+class TactoidVisualizer {
+    init(MultiDirector sim) {
+        self.sim = sim
+    }
+
+    visualizeDirectorSize() {
+      var ll = Length().integrand(self.sim.mesh)
+      return ll.sum()/ll.count()/3
+    }
+
+    visualizeMesh(grade=nil) {
+      var g = [2], sel = nil
+      if (grade) g = grade
+      if (!islist(g)) g = [ g ]
+      return plotmesh(self.sim.mesh, selection = self.sim.shell, grade=g)
+    }
+
+    visualizeDirector(color=nil) {
+      var col = color
+      if (isnil(color)) col = White
+      var dl = self.visualizeDirectorSize()
+      var g = Graphics()
+      for (id in 0...self.sim.mesh.count()) {
+        var x = self.sim.mesh.vertexposition(id)
+        var nn = self.sim.director[0,id]
+        g.display(Cylinder(x-nn*dl, x+nn*dl, aspectratio=0.3, color = White))
+      }
+      return g
+    }
+
+    visualizeDirectorOnSelection(Selection selection, color, scale = 0.1) {
+      var selVertices = selection.idlistforgrade(0)
+      var g = Graphics()
+      for (id in 0...selection.count(0)) {
+        var x = self.sim.mesh.vertexposition(selVertices[id])
+        var xx = Matrix([x[0],x[1],x[2]])
+        var dx = self.sim.nInterior[0, selVertices[id]]
+        var dxx = Matrix([dx[0],dx[1], dx[2]])
+        g.display(Cylinder(xx - scale*dxx, xx + scale*dxx, aspectratio = 0.3, color = color))
+      }
+      return g
+    }
+
+    visualize() {
+      return self.visualizeDirector()
+    }
+
+    visualizeBoundary() {
+        var director = self.visualizeDirectorOnSelection(self.sim.shell, White)
+        var shell = plotmesh(self.sim.mesh, selection=self.sim.shell, grade=[1,2])
+        return shell + director
+    }
+
+    visualizeTactoid(){
+        var g0 = self.visualizeMesh()
+        var g1 = self.visualizeWholeShapeInsideFilled()
+        return g0 + g1
+    }
+
+    visualizeWholeShapeInsideFilled() {
+        self.whole = Selection(self.sim.mesh, fn(x,y,z) z < 0)
+        var gInt = self.visualizeMesh(grade=[1,2]) + self.visualizeDirectorOnSelection(self.sim.shell, White)
+        var gExt = self.visualizeDirectorOnSelection(self.whole, Blue)
+    return gInt + gExt
+    }
+
+    createMovie(String fname, Graphics g) {
+      print "--------------------\t Generating Movie (...please wait...) -----"
+      var movie = MovieMaker(fname, framerate=10)
+      for (phi in 0..2*Pi:Pi/20) {
+        var cam = Camera(viewpoint = Matrix([4*sin(phi), 4, 4*cos(phi)]))
+        var l = [Matrix([0,0,10]), Matrix([0,0,10]), Matrix([0,0,10])]
+        cam.sky = Matrix([0,1,0])
+        movie.frame(g, camera = cam,lights=l)
+      }
+      movie.make()
+      movie.clean()
+    }
+
+    plotFieldOnSelection(Field f, Mesh m, Selection sel, scale=1) {
+      var selVertices = sel.idlistforgrade(0)
+      var g = Graphics()
+      for (id in 0...sel.count(0)) {
+          var x = m.vertexposition(selVertices[id])
+          var xx = Matrix([x[0],x[1],x[2]])
+
+          var dx = f[0, selVertices[id]]
+          var dxx = Matrix([dx[0],dx[1],dx[2]])
+
+          g.display(Cylinder(xx - scale*dxx, xx + scale*dxx, aspectratio=0.2))
+      }
+      return g
+    }
+
+    tracer(Graphics g, String file_name) {
+      print "--------------------\t Tracing Figure ${file_name}"
+      var fig = g
+      fig.background = White
+      var pov = POVRaytracer(fig)
+      pov.viewangle = 100
+      pov.light = [Matrix([3,3,10]), Matrix([-3,3,10]), Matrix([0,-3,10])]
+      pov.render(file_name, quiet = true, display=true, transparent=true)
+    }
+}
