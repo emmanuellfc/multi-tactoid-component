@@ -1,8 +1,12 @@
-//
+/*
+ * Multi-tactoid-component model
+ * Author: J. Emmanuel Flores
+ */
+
 import meshgen
 
 class MultiDirector {
-    init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, tau_int=1, tau_ext = 1, gamma = 1000) {
+    init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, tau_int=1, tau_ext = 1, gamma = 0.01) {
         self.kappa_int = kappa_int
         self.kappa_ext = kappa_ext
 
@@ -90,13 +94,13 @@ class MultiDirector {
         var idsShell = shellg0.lines()
         var idsExterior = exteriorg0.lines()
         var idsBnd = bndg0.lines()
-        for (id in idsInterior) {self.interior[0,Int(id)] = true}
+        for (id in idsInterior) {self.interior[0, Int(id)] = true}
         for (i in 1..2) self.interior.addgrade(i)
-        for (id in idsShell) {self.shell[0,Int(id)] = true}
+        for (id in idsShell) {self.shell[0, Int(id)] = true}
         for (i in 1..2) self.shell.addgrade(i)
-        for (id in idsExterior) {self.exterior[0,Int(id)] = true}
+        for (id in idsExterior) {self.exterior[0, Int(id)] = true}
         for (i in 1..2) self.exterior.addgrade(i)
-        for (id in idsBnd) {self.bnd[0,Int(id)] = true}
+        for (id in idsBnd) {self.bnd[0, Int(id)] = true}
         for (i in 1..2) self.bnd.addgrade(i)
     }
 
@@ -274,7 +278,8 @@ class MultiDirector {
     refine(adaptive = false) {
         if (adaptive == true) { // Doing adaptive refinement
             print "--------------------\t Points before adaptive refinement = ${self.mesh.count(0)}"
-            var shellg2 = self.shell.idlistforgrade(2)
+            // var shellg2 = self.shell.idlistforgrade(2)
+            var shellg2 = self.interior.idlistforgrade(2)
             var srefine = Selection(self.mesh)
             for (id in shellg2) { srefine[2, id] = true }
             var ref = MeshRefiner([self.mesh,

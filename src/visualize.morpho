@@ -53,19 +53,20 @@ class TactoidVisualizer {
 
     visualizeBoundary() {
         var director = self.visualizeDirectorOnSelection(self.sim.shell, White)
-        var shell = plotmesh(self.sim.mesh, selection=self.sim.shell, grade=[1,2])
+        var shell = plotmesh(self.sim.mesh, selection=self.sim.shell, grade=[1])
         return shell + director
     }
 
     visualizeTactoid(){
-        var g0 = self.visualizeMesh()
+        // var g0 = self.visualizeMesh()
         var g1 = self.visualizeWholeShapeInsideFilled()
-        return g0 + g1
+        return g1
     }
 
     visualizeWholeShapeInsideFilled() {
         self.whole = Selection(self.sim.mesh, fn(x,y,z) z < 0)
-        var gInt = self.visualizeMesh(grade=[1,2]) + self.visualizeDirectorOnSelection(self.sim.shell, White)
+        // var gInt = self.visualizeMesh(grade=[1]) + self.visualizeDirectorOnSelection(self.sim.interior, White)
+        var gInt = self.visualizeDirectorOnSelection(self.sim.interior, White)
         var gExt = self.visualizeDirectorOnSelection(self.whole, Blue)
     return gInt + gExt
     }
@@ -98,13 +99,14 @@ class TactoidVisualizer {
       return g
     }
 
-    tracer(Graphics g, String file_name) {
-      print "--------------------\t Tracing Figure ${file_name}"
-      var fig = g
-      fig.background = White
-      var pov = POVRaytracer(fig)
-      pov.viewangle = 100
-      pov.light = [Matrix([3,3,10]), Matrix([-3,3,10]), Matrix([0,-3,10])]
-      pov.render(file_name, quiet = true, display=true, transparent=true)
+    tracer(Graphics g, String file_name, vp, va) {
+        print "--------------------\t Tracing Figure ${file_name}"
+        var fig = g
+        fig.background = White
+        var pov = POVRaytracer(fig)
+        pov.viewpoint = vp
+        pov.viewangle = va
+        pov.light = [Matrix([3,3,10]), Matrix([-3,3,10]), Matrix([0,-3,10])]
+        pov.render(file_name, quiet = true, display=true, transparent=true)
     }
 }

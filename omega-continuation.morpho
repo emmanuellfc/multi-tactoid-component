@@ -1,0 +1,27 @@
+import plot
+
+import "src/multiDirector.morpho"
+import "src/visualize.morpho"
+
+var niter = 200
+var sim = MultiDirector()
+var vis = TactoidVisualizer(sim)
+sim.omega_int = 0.1
+sim.kappa_int = 1.0
+sim.omega_ext = 1.0
+sim.kappa_ext = 1.0
+sim.loadData("prototype.mesh", "intg0.txt", "shellg0.txt", "extg0.txt", "bndg0.txt")
+sim.initialFields()
+sim.setupProblem()
+sim.setupRegularization()
+sim.setupOptimizers()
+sim.optimizeLoop(niter)
+for (i in 1..1:1) {
+    sim.refine(adaptive=true)
+    sim.optimizeLoop(niter)
+    var g = vis.visualizeTactoid()
+    var fname = "omega-continuation/front-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
+    var sname = "omega-continuation/side-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
+    vis.tracer(g, fname, Matrix([0,0,5]), 100)
+    vis.tracer(g, sname, Matrix([-5,0,5]), 50)
+}

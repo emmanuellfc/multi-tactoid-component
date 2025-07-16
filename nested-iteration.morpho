@@ -1,0 +1,114 @@
+// Nested Iteration Kappa Continuation //
+
+import "src/multiDirector.morpho"
+import "src/visualize.morpho"
+
+var sim = MultiDirector()
+var vis = TactoidVisualizer(sim)
+
+// Global physical parameters
+// var kappas = [0.01, 0.0215443, 0.0464159, 0.1, 0.215443, 0.464159, 1.0, 2.15443, 4.64159, 10.0]
+// var kappas = [0.01, 0.0215443]
+var omegas = [1, 2]
+var first_level = 0
+var refmax = 2
+var niter = 150
+
+var aRLevel2 = []
+var target = "kappa-continuation-v4/"
+
+// These variables will hold the selections from the PREVIOUS iteration
+var previousShell, previousBndCube
+for (omega, k in omegas) {
+    var coarseARs = []
+    var aRLevel1 = []
+    for (kappa, j in kappas) { // Starting omega continuation
+        sim.omega = omega
+        sim.kappa = kappa
+        if (omega == omegas[k] && kappa == kappas[0]) { // read in initial data for the very first omega
+            sim.loadMesh(initialMesh)
+            sim.initialField()
+            sim.configureProblem()
+
+            // Capture initial selections for the FIRST iteration's output
+            // These will also serve as 'previous' for the NEXT iteration
+            previousShell = sim.shell
+            previousBndCube = sim.bndCube
+
+        } else { // For subsequent omegas, load the VTK from the previous omega's FIRST_LEVEL output
+            var meshName = target + "neg-tactoid-${omega}-${kappas[j-1]}-level-${first_level}.vtk"
+            sim.loadVTK(meshName)
+            // Pass the selections from the end of the PREVIOUS omega's *first level* run
+            sim.passSelections(previousShell, previousBndCube)
+            sim.setupProblem()
+            sim.setupOptimizers()
+        }
+
+        // Reinitialize the problem (this might be redundant if setupProblem handles it)
+        print "--------------------\t \U00002705 Omega = ${omega}, Kappa = ${kappa} \t "
+        sim.optimizeLoop(niter) // Optimize on first level
+
+        // Save vtk of optimized first level solution
+        var vtkOutFile = target + "neg-tactoid-${omega}-${kappa}-level-${first_level}.vtk"
+        sim.saveVTK(vtkOutFile)
+
+        // Compute and save energy profile
+        var energies = target + "energies-omega-${omega}-kappa-${kappa}-level-${first_level}.txt"
+        sim.energyProfile(energies)
+
+        // Plot and render first level solution
+        var gnameLowerLevel = target + "landscape-neg-tactoid-${omega}-${kappa}-${first_level}.pov"
+        var gFinalLowerLevel = vis.visualizeTactoid()
+        tracer(gFinalLowerLevel, gnameLowerLevel)
+        var tactoidFigureLowerLevel = target + "tactoid-neg-tactoid-${omega}-${kappa}-${first_level}.pov"
+        tracer(vis.visualizeBoundary(), tactoidFigureLowerLevel)
+
+        var firstLevelAR = sim.aspectRatio()
+        print "--------------------\t \U0001F3C8 Aspect Ratio at level ${first_level}: ${firstLevelAR.format("%4.9g")}\t"
+        coarseARs.append(firstLevelAR.format("%4.9g"))
+
+        previousShell = sim.shell
+        previousBndCube = sim.bndCube
+
+        for (level in 1..refmax) { // Refinement Procedure
+            print "--------------------\t Refinement @ level: ${level}"
+            sim.refine(adaptive=true)
+            print "--------------------\t Optimization @ level: ${level}"
+
+            sim.optimizeLoop(niter)
+            sim.fopt.stepsize = 0.01
+            var aRLevel = sim.aspectRatio()
+
+            if (level == 1) {
+                print "--------------------\t \U0001F3C8 AR @ level ${level} for \U000003C9 = ${omega}: ${aRLevel.format("%4.9g")}"
+                aRLevel1.append(aRLevel.format("%4.9g"))
+
+            } else {
+                print "--------------------\t \U0001F3C8 AR @ level ${level} for \U000003C9 = ${omega}: ${aRLevel.format("%4.9g")}"
+                aRLevel2.append(aRLevel.format("%4.9g"))
+            }
+
+            // Plot and render the solution at current level
+            var gFinal = vis.visualizeTactoid()
+            var gname = target + "landscape-neg-tactoid-${omega}-${kappa}-${level}.pov"
+            tracer(gFinal, gname)
+            var tactoidFigure = target + "tactoid-neg-tactoid-${omega}-${kappa}-${level}.pov"
+            tracer(vis.visualizeBoundary(), tactoidFigure)
+
+            // Save the Final Mesh and Field
+            var outData = target + "neg-tactoid-kappa-${kappa}-omega-${omega}-level_${level}.vtk"
+            sim.saveVTK(outData)
+            // Save Energy Profile
+            var energies = target + "energies-kappa-${kappa}-omega-${omega}-level-${level}.txt"
+            sim.energyProfile(energies)
+        }
+    }
+
+    var f = File(target + "aspect-ratios-level-0-omega-${omega}.txt", "w")
+    for (kappa, j in kappas) f.write("${kappa} ${coarseARs[j]}")
+    f.close()
+
+    var g = File(target + "aspect-ratios-level-1-omega-${omega}.txt", "w")
+    for (kappa, j in kappas) g.write("${kappa} ${aRLevel1[j]}")
+    g.close()
+}
