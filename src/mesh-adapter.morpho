@@ -1,0 +1,70 @@
+/*
+	Implementation of mesh adapter for multi-tactoid problem
+*/
+
+
+import meshgen
+
+class MeshAdapter() {
+	init() {
+		self.mesh = nil
+	}
+
+	createMesh(r=2.1, D=0.5) {
+        // Define interval for the mesh
+        var intervalSphere = [-4..4:D,-4..4:D, -4..4:D]
+
+        // Define function to get vertex Points given a mesh //
+        fn getVertexPoints(mesh) {
+            var m = mesh
+            var points = []
+            for (id in 0...m.count()) {
+            points.append(m.vertexposition(id))
+            }
+            return points
+        }
+
+        fn selectInterior(x,y,z, eps = 0.01) {
+            return x^2 + y^2 + z^2 < (r/2)^2 + eps
+        }
+
+        fn selectExterior(x,y,z, eps = 0.01) {
+            return x^2 + y^2 + z^2 > (r/2)^2 + eps
+        }
+
+        fn selectShell(x,y,z, eps = 0.01) {
+            return (x^2 + y^2 + z^2 >= (r/2)^2 - eps) && (x^2 + y^2 + z^2 <= (r/2)^2 + eps)
+        }
+
+        // Starting Mesh Manipulation //
+
+        // Define Domain for the sphere
+        var sphereDomain = CircularDomain(Matrix([0,0,0]), r/2)
+        var mgSphere = MeshGen(sphereDomain, intervalSphere, quiet=true)
+        var mesh_interior = mgSphere.build()
+
+        // Define Domain for the box
+        var boxDomain = RectangularDomain(intervalSphere)
+        var boxHole = boxDomain.difference(sphereDomain)
+        var mg_hole = MeshGen(boxHole, intervalSphere, quiet=true)
+        var mesh_exterior = mg_hole.build()
+
+        // Define Point-Cloud //
+        var ptsSel = getVertexPoints(mesh_exterior)
+        var interiorSelection = Selection(mesh_interior, selectInterior)
+        interiorSelection.addgrade(0)
+        interiorSelection.addgrade(1)
+        var vSelId = interiorSelection.idlistforgrade(0)
+
+        // Populate the Point-Cloud //
+        for (id in vSelId) {
+            ptsSel.append(mesh_interior.vertexposition(id))
+        }
+
+        // Create mesh using Delaunay Triangulation //
+        self.mesh = DelaunayMesh(ptsSel)
+        for (i in 0..3) {self.mesh.addgrade(i)}
+        return self.mesh
+    }
+
+}
