@@ -1,9 +1,12 @@
 /*
- * Multi-tactoid-component model
+
+ * Multi-Tactoid-component model
  * Author: J. Emmanuel Flores
- */
+
+*/
 
 import meshgen
+import vtk
 
 class MultiDirector {
     init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, tau_int=1, tau_ext = 1, gamma = 0.01) {
@@ -80,33 +83,79 @@ class MultiDirector {
         return self.mesh
     }
 
-    loadData(String m, String int, String shell, String exterior, String bnd) {
-        self.mesh = Mesh(m)
+    _loadVTK(String intFName, String extFName) {
+        var vtkIntImp = VTKImporter(intFName)
+        var vtkExtImp = VTKImporter(extFName)
+        self.mesh = vtkIntImp.mesh()
+        self.nInterior = vtkIntImp.field("nInterior")
+        self.nExterior = vtkExtImp.field("nExterior")
+    }
+
+    _loadSelections(String intSel, String shellSel, String extSel, String bndSel) {
         self.interior = Selection(self.mesh)
-        self.shell = Selection(self.mesh)
+        self.shell    = Selection(self.mesh)
         self.exterior = Selection(self.mesh)
-        self.bnd = Selection(self.mesh)
-        var intg0 = File(int)
-        var shellg0 = File(shell)
-        var exteriorg0 = File(exterior)
-        var bndg0 = File(bnd)
-        var idsInterior = intg0.lines()
-        var idsShell = shellg0.lines()
-        var idsExterior = exteriorg0.lines()
-        var idsBnd = bndg0.lines()
-        for (id in idsInterior) {self.interior[0, Int(id)] = true}
+        self.bnd      = Selection(self.mesh)
+        var intFile   = File(intSel)
+        var shellFile = File(shellSel)
+        var extFile   = File(extSel)
+        var bndFile   = File(bndSel)
+
+        var intIDS = intFile.lines()
+        var shellIDS = shellFile.lines()
+        var extIDS = extFile.lines()
+        var bndIDS = bndFile.lines()
+
+        for (id in intIDS) {self.interior[0, Int(id)] = true}
         for (i in 1..2) self.interior.addgrade(i)
-        for (id in idsShell) {self.shell[0, Int(id)] = true}
+
+        for (id in shellIDS) {self.shell[0, Int(id)] = true}
         for (i in 1..2) self.shell.addgrade(i)
-        for (id in idsExterior) {self.exterior[0, Int(id)] = true}
+
+        for (id in extIDS) {self.exterior[0, Int(id)] = true}
         for (i in 1..2) self.exterior.addgrade(i)
-        for (id in idsBnd) {self.bnd[0, Int(id)] = true}
+
+        for (id in bndIDS) {self.bnd[0, Int(id)] = true}
         for (i in 1..2) self.bnd.addgrade(i)
+    }
+
+    loadData(String intVTK, String extVTK, String intSel, String shellSel, String extSel, String bndSel) {
+        self._loadVTK(intVTK, extVTK)
+        self._loadSelections(intSel, shellSel, extSel, bndSel)
+    }
+
+    loadGeometry(String mesh, String intSel, String shellSel, String extSel, String bndSel) {
+        self.mesh = Mesh(mesh)
+        self._loadSelections(intSel, shellSel, extSel, bndSel)
     }
 
     initialFields() {
         self.nInterior = Field(self.mesh, fn (x,y,z) Matrix([1,0,0]))
         self.nExterior = Field(self.mesh, fn (x,y,z) Matrix([1,0,0]))
+    }
+
+    exportVTK(String meshName, String extFname, String intFname) {
+        var vtkMesh = VTKExporter(self.mesh)
+        vtkMesh.export(meshName + ".vtk")
+        var vtkInterior = VTKExporter(self.nInterior, fieldname="nInterior")
+        vtkInterior.export(intFname + ".vtk")
+        var vtkExterior = VTKExporter(self.nExterior, fieldname="nExterior")
+        vtkExterior.export(extFname + ".vtk")
+    }
+
+    exportSelections(String intFName, String shellFName, String extFName, String bndFName) { // Save selections in .txt format
+        var intVertices   = self.interior.idlistforgrade(0)
+        var shellVertices = self.shell.idlistforgrade(0)
+        var extVertices   = self.exterior.idlistforgrade(0)
+        var bndVertices   = self.bnd.idlistforgrade(0)
+        var f0 = File(intFName, "w")
+        var f1 = File(shellFName, "w")
+        var f2 = File(extFName, "w")
+        var f3 = File(bndFName, "w")
+        for (i in intVertices)   { f0.write("${i}") }
+        for (i in shellVertices) { f1.write("${i}") }
+        for (i in extVertices)   { f2.write("${i}") }
+        for (i in bndVertices)   { f3.write("${i}") }
     }
 
     setupSelections(r=2.1, D=0.5) {
