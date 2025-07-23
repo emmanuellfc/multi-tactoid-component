@@ -10,7 +10,9 @@ sim.omega_int = 0.1
 sim.kappa_int = 1.0
 sim.omega_ext = 1.0
 sim.kappa_ext = 1.0
-sim.loadData("prototype.mesh", "intg0.txt", "shellg0.txt", "extg0.txt", "bndg0.txt")
+sim.gamma = 0.01
+
+sim.loadGeometry("init-data/initMesh.mesh", "init-data/initInt.txt", "init-data/initShell.txt", "init-data/initExt.txt", "init-data/initBnd.txt")
 sim.initialFields()
 sim.setupProblem()
 sim.setupRegularization()
@@ -21,7 +23,8 @@ for (i in 1..1:1) {
     sim.optimizeLoop(niter)
     var g = vis.visualizeTactoid()
     var fname = "omega-continuation/front-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
-    var sname = "omega-continuation/side-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
-    vis.tracer(g, fname, Matrix([0,0,5]), 100)
-    vis.tracer(g, sname, Matrix([-5,0,5]), 50)
+    // var sname = "omega-continuation/side-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
+    vis.tracerTactoid(fname)
+    sim.exportVTK("omega-continuation/mesh", "omega-continuation/exterior", "omega-continuation/interior")
+    sim.exportSelections("omega-continuation/int.txt", "omega-continuation/shell.txt", "omega-continuation/ext.txt", "omega-continuation/bnd.txt")
 }
