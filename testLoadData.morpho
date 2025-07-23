@@ -1,0 +1,16 @@
+import plot
+import "src/multiDirector.morpho"
+
+var targetPath = "omega-continuation/"
+var int      = targetPath + "interior.vtk"
+var ext      = targetPath + "exterior.vtk"
+var intSel   = targetPath + "int.txt"
+var shellSel = targetPath + "shell.txt"
+var extSel   = targetPath + "ext.txt"
+var bndSel   = targetPath + "bnd.txt"
+var sim      = MultiDirector()
+sim.loadData(int, ext, intSel, shellSel, extSel, bndSel)
+Show(plotmesh(sim.mesh, selection = sim.shell, grade=[1]))
+Show(plotmesh(sim.mesh, selection = sim.interior, grade=[2]))
+Show(plotmesh(sim.mesh, selection = sim.exterior, grade=[0]))
+Show(plotmesh(sim.mesh, selection = sim.bnd, grade=[1]))
