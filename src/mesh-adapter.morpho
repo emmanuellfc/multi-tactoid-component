@@ -5,8 +5,9 @@
 
 import meshgen
 
-class MeshAdapter() {
-	init() {
+class MeshAdapter {
+
+    init() {
 		self.mesh = nil
 	}
 
