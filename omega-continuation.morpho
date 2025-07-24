@@ -1,16 +1,17 @@
 import plot
 
 import "src/multiDirector.morpho"
+import "src/mesh-adapter.morpho"
 import "src/visualize.morpho"
 
-var niter = 200
+var niter = 500
 var sim = MultiDirector()
 var vis = TactoidVisualizer(sim)
-sim.omega_int = 0.1
-sim.kappa_int = 1.0
+sim.omega_int = 0.01
+sim.kappa_int = 0.01
 sim.omega_ext = 1.0
-sim.kappa_ext = 1.0
-sim.gamma = 0.01
+sim.kappa_ext = 0.01
+sim.gamma = 1.0
 
 sim.loadGeometry("init-data/initMesh.mesh", "init-data/initInt.txt", "init-data/initShell.txt", "init-data/initExt.txt", "init-data/initBnd.txt")
 sim.initialFields()
@@ -18,13 +19,19 @@ sim.setupProblem()
 sim.setupRegularization()
 sim.setupOptimizers()
 sim.optimizeLoop(niter)
-for (i in 1..1:1) {
-    sim.refine(adaptive=true)
-    sim.optimizeLoop(niter)
-    var g = vis.visualizeTactoid()
-    var fname = "omega-continuation/front-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
-    // var sname = "omega-continuation/side-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
-    vis.tracerTactoid(fname)
-    sim.exportVTK("omega-continuation/mesh", "omega-continuation/exterior", "omega-continuation/interior")
-    sim.exportSelections("omega-continuation/int.txt", "omega-continuation/shell.txt", "omega-continuation/ext.txt", "omega-continuation/bnd.txt")
-}
+Show(vis.visualizeTactoid())
+// for (i in 1..1:1) {
+//     sim.refine(adaptive=true)
+//     sim.optimizeLoop(niter)
+//     var fname  = "omega-continuation/front-view-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.pov"
+//     var intSelName   = "omega-continuation/interior-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.txt"
+//     var shellSelName = "omega-continuation/shell-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.txt"
+//     var extSelName   = "omega-continuation/exterior-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.txt"
+//     var bndSelName   = "omega-continuation/boundary-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}.txt"
+//     var meshExp = "omega-continuation/mesh-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}"
+//     var intExp = "omega-continuation/interior-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}"
+//     var extExp = "omega-continuation/exterior-multi-tactoid-kappa-ext-${sim.kappa_ext}-kappa_int-${sim.kappa_int}-omega_ext-${sim.omega_ext}-omega_int-${sim.omega_int}-gamma-${sim.gamma}-level-${i}"
+//     vis.tracerTactoid(fname)
+//     sim.exportVTK(meshExp, extExp, intExp)
+//     sim.exportSelections(intSelName, shellSelName, extSelName, bndSelName)
+// }

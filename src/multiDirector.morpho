@@ -5,19 +5,16 @@
 
 */
 
-import "mesh-adapter.morpho"
 import vtk
+import optimize
 
 class MultiDirector {
-    init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, tau_int=1, tau_ext = 1, gamma = 0.01) {
+    init(kappa_int=1, kappa_ext=1, omega_int=1, omega_ext=1, gamma = 0.01) {
         self.kappa_int = kappa_int
         self.kappa_ext = kappa_ext
 
         self.omega_int = omega_int
         self.omega_ext = omega_ext
-
-        self.tau_int = tau_int
-        self.tau_ext = tau_ext
 
         self.gamma = gamma
 
@@ -26,10 +23,10 @@ class MultiDirector {
         self.nExterior = nil
     }
 
-    createMesh() {
-        var meshAdapter = MeshAdapter()
-        sim.mesh = meshAdapter.createMesh()
-    }
+    // createMesh() {
+    //     var meshAdapter = MeshAdapter()
+    //     self.mesh = meshAdapter.createMesh()
+    // }
 
     _loadVTK(String intFName, String extFName) {
         var vtkIntImp = VTKImporter(intFName)
@@ -171,14 +168,13 @@ class MultiDirector {
                                 prefactor = self.kappa_ext)
         var surfExtFunc    = Area()
         self.problem.addenergy(surfExtFunc,
-                                selection = self.shell,
-                                prefactor = self.tau_ext)
+                                selection = self.shell)
 
         var anchorExtFunc = AreaIntegral(fn (x, n) n.inner(normal())^2,
                                         self.nExterior)
         self.problem.addenergy(anchorExtFunc,
                                 selection = self.shell,
-                                prefactor = self.omega_ext * self.tau_ext)
+                                prefactor = self.omega_ext)
 
         // // INTERIOR Functionals
         var elasticIntFunc = Nematic(self.nInterior,
@@ -192,15 +188,14 @@ class MultiDirector {
         var surfIntFunc    = Area()
 
         self.problem.addenergy(surfIntFunc,
-                                selection = self.shell,
-                                prefactor = self.tau_int)
+                                selection = self.shell)
 
         var anchorIntFunc  = AreaIntegral(fn (x, n) n.inner(normal())^2,
                                         self.nInterior)
 
         self.problem.addenergy(anchorIntFunc,
                                 selection = self.shell,
-                                prefactor = self.omega_int * self.tau_int)
+                                prefactor = self.omega_int)
 
         // Interface Condition @ Two Fields
         fn anchoringBdryDensity(x, qInt, qExt) {
@@ -275,7 +270,6 @@ class MultiDirector {
     refine(adaptive = false) {
         if (adaptive == true) { // Doing adaptive refinement
             print "--------------------\t Points before adaptive refinement = ${self.mesh.count(0)}"
-            // var shellg2 = self.shell.idlistforgrade(2)
             var shellg2 = self.interior.idlistforgrade(2)
             var srefine = Selection(self.mesh)
             for (id in shellg2) { srefine[2, id] = true }
